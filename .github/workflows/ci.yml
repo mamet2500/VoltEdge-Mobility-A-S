@@ -1,0 +1,78 @@
+name: VoltEdge CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, develop, feature/**]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  test:
+    name: Test og kvalitetssikring
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout kode
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Installer afhaengigheder
+        run: pip install -r requirements.txt
+
+      - name: Tjek Python syntax
+        run: |
+          python -m py_compile VoltEdge-Mobility.py
+          python -m py_compile domain/aggregates/charger.py
+          python -m py_compile domain/entities/connector.py
+          python -m py_compile domain/entities/incident.py
+          python -m py_compile domain/value_objects/telemetry_reading.py
+          python -m py_compile domain/events/domain_events.py
+          python -m py_compile domain/services/fault_detection.py
+          python -m py_compile domain/services/predictive_maintenance.py
+          python -m py_compile infrastructure/mysqlrepo.py
+          python -m py_compile api/routes.py
+
+      - name: Koer unit tests
+        env:
+          API_KEY: voltedge-dev-key
+          DB_HOST: localhost
+          DB_NAME: voltedge_monitoring
+          DB_USER: root
+          DB_PASSWORD: test
+        run: pytest tests/ -v --tb=short
+
+  build:
+    name: Byg Docker image
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - name: Checkout kode
+        uses: actions/checkout@v4
+
+      - name: Opret .env til Docker build
+        run: |
+          echo "DB_HOST=db" >> .env
+          echo "DB_NAME=voltedge_monitoring" >> .env
+          echo "DB_USER=root" >> .env
+          echo "DB_PASSWORD=testpassword" >> .env
+          echo "API_KEY=voltedge-dev-key" >> .env
+          echo "MYSQL_ROOT_PASSWORD=testpassword" >> .env
+
+      - name: Byg Docker image
+        run: docker build -t voltedge-api .
+
+      - name: Smoke test
+        run: |
+          docker run -d --name voltedge_test \
+            -e DB_HOST=localhost \
+            -e DB_NAME=voltedge_monitoring \
+            -e DB_USER=root \
+            -e DB_PASSWORD=test \
+            -e API_KEY=voltedge-dev-key \
+            -p 5001:5001 voltedge-api
+          sleep 5
+          curl --fail http://localhost:5001/health || exit 1
+          docker stop voltedge_test
