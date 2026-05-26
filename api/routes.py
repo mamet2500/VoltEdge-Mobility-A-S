@@ -385,3 +385,12 @@ def predict_maintenance(connector_id):
     if not readings:
         return error_response("Ingen telemetrimaalinger fundet", 404)
     return jsonify(predictive_service.analyse(connector_id, readings))
+
+# Power BI endpoints – ingen API-nøgle krævet (til eksamen/demo)
+@api.route("/powerbi/faults", methods=["GET"])
+def powerbi_faults():
+    return analytics_faults()
+
+@api.route("/powerbi/uptime", methods=["GET"])
+def powerbi_uptime():
+    return analytics_uptime()
