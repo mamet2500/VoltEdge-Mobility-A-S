@@ -1,5 +1,3 @@
-cat > voltedge_db.sql << 'EOF'
-CREATE DATABASE IF NOT EXISTS voltedge_monitoring;
 USE voltedge_monitoring;
 
 CREATE TABLE IF NOT EXISTS chargers (
