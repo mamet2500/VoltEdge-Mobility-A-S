@@ -1,51 +1,70 @@
--- VoltEdge Monitoring – Database Setup
--- Kør denne fil i MySQL Workbench for at oprette tabellerne
-
+cat > voltedge_db.sql << 'EOF'
 CREATE DATABASE IF NOT EXISTS voltedge_monitoring;
 USE voltedge_monitoring;
 
--- Ladestandere
 CREATE TABLE IF NOT EXISTS chargers (
-    charger_id   VARCHAR(64)  PRIMARY KEY,
-    location_id  VARCHAR(64)  NOT NULL,
-    status       ENUM('available','occupied','faulted','offline','unknown')
-                 NOT NULL DEFAULT 'unknown',
-    last_seen    DATETIME,
-    created_at   DATETIME DEFAULT CURRENT_TIMESTAMP
+    id              INT AUTO_INCREMENT PRIMARY KEY,
+    serial_number   VARCHAR(100) NOT NULL UNIQUE,
+    model           VARCHAR(100),
+    location        VARCHAR(255) NOT NULL,
+    status          VARCHAR(50)  NOT NULL DEFAULT 'unknown',
+    created_at      DATETIME     DEFAULT CURRENT_TIMESTAMP,
+    updated_at      DATETIME     DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_serial (serial_number),
+    INDEX idx_status (status)
 );
 
--- Telemetrimålinger fra ladestandere
-CREATE TABLE IF NOT EXISTS telemetry (
-    id           VARCHAR(36)  PRIMARY KEY,
-    charger_id   VARCHAR(64)  NOT NULL,
-    connector_id VARCHAR(64)  NOT NULL,
-    power_kw     FLOAT        NOT NULL,
-    voltage_v    FLOAT        NOT NULL,
-    current_a    FLOAT        NOT NULL,
-    status       ENUM('available','occupied','faulted','offline','unknown') NOT NULL,
-    error_code   VARCHAR(128),
-    ts           DATETIME     DEFAULT CURRENT_TIMESTAMP,
-    INDEX idx_charger (charger_id),
-    INDEX idx_ts (ts)
-);
-
--- Incidents oprettet ved fejldetektion
-CREATE TABLE IF NOT EXISTS incidents (
-    incident_id  CHAR(36)     PRIMARY KEY,
-    charger_id   VARCHAR(64)  NOT NULL,
-    connector_id VARCHAR(64)  NOT NULL,
-    fault_code   VARCHAR(64),
-    priority     ENUM('low','medium','high') NOT NULL DEFAULT 'medium',
-    status       ENUM('open','in_progress','resolved') NOT NULL DEFAULT 'open',
-    description  TEXT,
-    created_at   DATETIME     DEFAULT CURRENT_TIMESTAMP,
-    resolved_at  DATETIME,
+CREATE TABLE IF NOT EXISTS connectors (
+    id               INT AUTO_INCREMENT PRIMARY KEY,
+    charger_id       INT          NOT NULL,
+    connector_number INT          NOT NULL,
+    type             VARCHAR(50)  NOT NULL DEFAULT 'Type2',
+    status           VARCHAR(50)  NOT NULL DEFAULT 'unknown',
+    created_at       DATETIME     DEFAULT CURRENT_TIMESTAMP,
+    updated_at       DATETIME     DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (charger_id) REFERENCES chargers(id) ON DELETE CASCADE,
     INDEX idx_charger (charger_id),
     INDEX idx_status (status)
 );
 
--- Eksempeldata
-INSERT IGNORE INTO chargers (charger_id, location_id, status) VALUES
-    ('CHR-001', 'LOC-CPH-01', 'available'),
-    ('CHR-002', 'LOC-CPH-02', 'available'),
-    ('CHR-003', 'LOC-AAR-01', 'available');
+CREATE TABLE IF NOT EXISTS telemetry_readings (
+    id           INT AUTO_INCREMENT PRIMARY KEY,
+    connector_id INT              NOT NULL,
+    ts           DATETIME         DEFAULT CURRENT_TIMESTAMP,
+    voltage      DECIMAL(10,2)    NOT NULL,
+    current_amp  DECIMAL(10,2)    NOT NULL,
+    power_kw     DECIMAL(10,2)    NOT NULL,
+    temperature  DECIMAL(10,2),
+    status       VARCHAR(50)      NOT NULL,
+    error_code   VARCHAR(100),
+    FOREIGN KEY (connector_id) REFERENCES connectors(id) ON DELETE CASCADE,
+    INDEX idx_connector (connector_id),
+    INDEX idx_ts (ts)
+);
+
+CREATE TABLE IF NOT EXISTS incidents (
+    id           INT AUTO_INCREMENT PRIMARY KEY,
+    connector_id INT          NOT NULL,
+    fault_code   VARCHAR(100) NOT NULL,
+    priority     VARCHAR(50)  NOT NULL DEFAULT 'medium',
+    status       VARCHAR(50)  NOT NULL DEFAULT 'open',
+    description  TEXT,
+    created_at   DATETIME     DEFAULT CURRENT_TIMESTAMP,
+    updated_at   DATETIME     DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    resolved_at  DATETIME,
+    FOREIGN KEY (connector_id) REFERENCES connectors(id) ON DELETE CASCADE,
+    INDEX idx_connector (connector_id),
+    INDEX idx_status (status)
+);
+
+INSERT IGNORE INTO chargers (serial_number, model, location, status) VALUES
+    ('CHR-001', 'ABB Terra 24', 'København, Nørreport', 'available'),
+    ('CHR-002', 'Zaptec Pro',   'København, Østerbro',  'available'),
+    ('CHR-003', 'ABB Terra 24', 'Aarhus, Banegård',     'available');
+
+INSERT IGNORE INTO connectors (charger_id, connector_number, type, status) VALUES
+    (1, 1, 'Type2', 'available'),
+    (1, 2, 'Type2', 'available'),
+    (2, 1, 'CCS',   'available'),
+    (3, 1, 'Type2', 'available');
+EOF
