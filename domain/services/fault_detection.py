@@ -5,8 +5,9 @@ from domain.events.domain_events import FaultDetected
 logger = logging.getLogger(__name__)
 
 class FaultDetectionService:
-    MIN_VOLTAGE_V = 180.0
-    MAX_CURRENT_A = 32.0
+    MIN_VOLTAGE_V      = 180.0
+    MAX_CURRENT_A      = 32.0
+    MAX_TEMPERATURE_C  = 65.0
 
     def evaluate(self, reading, charger_serial):
         fault_code = self._detect_fault(reading)
@@ -25,6 +26,8 @@ class FaultDetectionService:
             return "undervoltage"
         if reading.current_amp > self.MAX_CURRENT_A:
             return "overcurrent"
+        if reading.temperature is not None and reading.temperature > self.MAX_TEMPERATURE_C:
+            return "overheating"
         return None
 
     def _classify_error_code(self, error_code):
@@ -32,15 +35,15 @@ class FaultDetectionService:
             return "unknown_fault"
         mapping = {
             "ConnectorLockFailure": "connector_lock_failure",
-            "GroundFailure": "ground_failure",
-            "OverCurrentFailure": "overcurrent",
-            "UnderVoltage": "undervoltage",
-            "OverVoltage": "overvoltage",
+            "GroundFailure":        "ground_failure",
+            "OverCurrentFailure":   "overcurrent",
+            "UnderVoltage":         "undervoltage",
+            "OverVoltage":          "overvoltage",
         }
         return mapping.get(error_code, "unknown_fault")
 
     def _determine_priority(self, fault_code):
-        if fault_code in ("overcurrent", "ground_failure", "overvoltage"):
+        if fault_code in ("overcurrent", "ground_failure", "overvoltage", "overheating"):
             return "high"
         if fault_code in ("undervoltage", "connector_lock_failure", "communication_error"):
             return "medium"
