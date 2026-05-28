@@ -3,6 +3,23 @@
 Flask REST API til overvågning og drift af ladeinfrastruktur for elbiler.
 6. semester eksamen - Erhvervsakademi København
 
+## Live Azure URL
+
+API kører på Azure Container Apps (Switzerland North):
+
+https://voltedge-api.wittydesert-a5a60432.switzerlandnorth.azurecontainerapps.io/apidocs
+
+Alle endpoints kræver header: X-API-Key: voltedge-prod-2024
+
+Power BI endpoints (ingen API key):
+- /powerbi/faults
+- /powerbi/uptime
+
+## Arkitektur
+
+Flask REST API → Azure Container Registry → Azure Container Apps
+MySQL kører som intern container i samme Container Apps miljø.
+
 ## DDD Arkitektur
 
 | DDD Begreb | Klasse | Fil |
@@ -16,15 +33,13 @@ Flask REST API til overvågning og drift af ladeinfrastruktur for elbiler.
 | Domain Service | PredictiveMaintenanceService | domain/services/predictive_maintenance.py |
 | Repository | MySQLRepository | infrastructure/mysqlrepo.py |
 
-## Opsætning
+## Lokal opsætning
 
 Kopier .env.example til .env og udfyld værdier.
 
 Start med Docker: docker compose up --build
 
 API kører på: http://localhost:5001/apidocs
-
-Alle endpoints kræver header: X-API-Key
 
 ## Endpoints
 
@@ -40,6 +55,8 @@ Alle endpoints kræver header: X-API-Key
 | GET | /analytics/faults | Fejlopsummering til Power BI |
 | GET | /analytics/uptime | Oppetid til Power BI |
 | GET | /connectors/{id}/predict | Predictive maintenance |
+| GET | /powerbi/faults | Fejlopsummering uden API key |
+| GET | /powerbi/uptime | Oppetid uden API key |
 
 ## Tests
 
@@ -48,4 +65,15 @@ Kør: pytest tests/ -v
 ## CI/CD
 
 GitHub Actions kører ved push til main, develop og feature branches.
-Pipeline: syntax check, unit tests, Docker build, smoke test.
+Pipeline: syntax check, unit tests, Docker build (linux/amd64), push til Azure Container Registry, smoke test.
+
+## Azure ressourcer
+
+| Ressource | Navn | Region |
+|-----------|------|--------|
+| Resource Group | voltedge-rg | Switzerland North |
+| Container Registry | voltedgeacr.azurecr.io | Switzerland North |
+| Container Apps miljø | voltedge-env | Switzerland North |
+| Flask API | voltedge-api | Switzerland North |
+| MySQL | voltedge-mysql | Switzerland North |
+| Log Analytics | voltedge-logs | Switzerland North |
