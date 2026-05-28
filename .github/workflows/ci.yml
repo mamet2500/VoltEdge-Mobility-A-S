@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [main, develop]
 
+env:
+  REGISTRY: ${{ secrets.ACR_LOGIN_SERVER }}
+  IMAGE_NAME: voltedge-api
+
 jobs:
   test:
     name: Test og kvalitetssikring
@@ -44,25 +48,29 @@ jobs:
           DB_PASSWORD: test
         run: pytest tests/ -v --tb=short
 
-  build:
-    name: Byg Docker image
+  build-and-push:
+    name: Byg og push til Azure Container Registry
     runs-on: ubuntu-latest
     needs: test
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
     steps:
       - name: Checkout kode
         uses: actions/checkout@v4
 
-      - name: Opret .env til Docker build
-        run: |
-          echo "DB_HOST=db" >> .env
-          echo "DB_NAME=voltedge_monitoring" >> .env
-          echo "DB_USER=root" >> .env
-          echo "DB_PASSWORD=testpassword" >> .env
-          echo "API_KEY=voltedge-dev-key" >> .env
-          echo "MYSQL_ROOT_PASSWORD=testpassword" >> .env
+      - name: Log ind paa Azure Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ secrets.ACR_LOGIN_SERVER }}
+          username: ${{ secrets.ACR_USERNAME }}
+          password: ${{ secrets.ACR_PASSWORD }}
 
-      - name: Byg Docker image
-        run: docker build -t voltedge-api .
+      - name: Byg og push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          platforms: linux/amd64
+          push: true
+          tags: ${{ secrets.ACR_LOGIN_SERVER }}/voltedge-api:latest
 
       - name: Smoke test
         run: |
@@ -72,7 +80,8 @@ jobs:
             -e DB_USER=root \
             -e DB_PASSWORD=test \
             -e API_KEY=voltedge-dev-key \
-            -p 5001:5001 voltedge-api
+            -p 5001:5001 \
+            ${{ secrets.ACR_LOGIN_SERVER }}/voltedge-api:latest
           sleep 5
           curl --fail http://localhost:5001/health || exit 1
           docker stop voltedge_test
